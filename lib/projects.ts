@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { emitProjectsChanged } from "./project-events";
 
 export function listProjects() {
   return prisma.project.findMany({ orderBy: { updatedAt: "desc" } });
@@ -8,27 +9,33 @@ export function getProject(id: string) {
   return prisma.project.findUnique({ where: { id } });
 }
 
-export function createProject(data: {
+export async function createProject(data: {
   name: string;
   status?: string;
   notes?: string;
 }) {
-  return prisma.project.create({
+  const project = await prisma.project.create({
     data: {
       name: data.name,
       status: data.status ?? "active",
       notes: data.notes,
     },
   });
+  emitProjectsChanged();
+  return project;
 }
 
-export function updateProject(
+export async function updateProject(
   id: string,
   data: { name?: string; status?: string; notes?: string }
 ) {
-  return prisma.project.update({ where: { id }, data });
+  const project = await prisma.project.update({ where: { id }, data });
+  emitProjectsChanged();
+  return project;
 }
 
-export function deleteProject(id: string) {
-  return prisma.project.delete({ where: { id } });
+export async function deleteProject(id: string) {
+  const project = await prisma.project.delete({ where: { id } });
+  emitProjectsChanged();
+  return project;
 }

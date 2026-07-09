@@ -1,7 +1,7 @@
-// Aurebesh is a transliteration alphabet for Basic (English), not a distinct
-// language. These rules approximate conventional Aurebesh phonetic spelling
-// (silent letters dropped, common digraphs simplified) so that rendering the
-// result in an Aurebesh font reads naturally. See README.txt for details.
+// heads up: Aurebesh isn't its own language, it's just an alphabet for
+// Basic (i.e. English). so these rules just fake the phonetic spelling
+// (drop silent letters, simplify digraphs etc) so it reads right once the
+// Aurebesh font kicks in. more info in README.txt if you're curious
 
 const DIGRAPH_RULES: Array<[RegExp, string]> = [
   [/ough/gi, "uf"],
