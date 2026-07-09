@@ -1,0 +1,952 @@
+@font-face {
+  font-family: "Aurebesh";
+  src: url("/fonts/aurebesh-regular.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aurebesh";
+  src: url("/fonts/aurebesh-bold.otf") format("opentype");
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aurebesh";
+  src: url("/fonts/aurebesh-italic.otf") format("opentype");
+  font-weight: normal;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aurebesh";
+  src: url("/fonts/aurebesh-bold-italic.otf") format("opentype");
+  font-weight: bold;
+  font-style: italic;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+  --bg: #05070a;
+  --panel-bg: linear-gradient(155deg, #0d0f10 0%, #0a0e14 60%, #0b0d12 100%);
+  --fg: #d9e6ee;
+  --amber: #ffb000;
+  --amber-dim: #a06f00;
+  --cyan: #5ad7ff;
+  --cyan-dim: #2f7c96;
+  --border: #1c2732;
+  --muted: #5c7183;
+  --danger: #ff4d4d;
+  --alert: #ff3b3b;
+  --mono: "Consolas", "SFMono-Regular", "Segoe UI Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  position: relative;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
+  overflow-x: hidden;
+}
+
+/* Starfield: sits behind everything else (grid, scopes) so the whole HUD
+   reads as a viewport looking out into space, not just abstract lines.
+   Two box-shadow dot layers (dim/small, brighter/larger) tiled across a
+   fixed field, one drifting very slowly for a "moving through space" feel,
+   plus a handful of real DOM stars that twinkle independently. */
+.hud-starfield {
+  position: fixed;
+  inset: 0;
+  z-index: -4;
+  pointer-events: none;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.hud-starfield .star-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 2px;
+  background: transparent;
+}
+
+.hud-starfield .star-layer-small {
+  box-shadow: 1423px 1281px #fff, 1350px 404px #fff, 274px 798px #fff, 569px 8px #fff,
+    1850px 169px #fff, 1960px 399px #fff, 1694px 1286px #fff, 406px 1120px #fff,
+    1500px 1014px #fff, 1302px 986px #fff, 900px 1376px #fff, 1506px 916px #fff,
+    607px 1085px #fff, 265px 671px #fff, 665px 389px #fff, 670px 791px #fff,
+    1335px 307px #fff, 295px 240px #fff, 1661px 442px #fff, 1869px 627px #fff,
+    908px 363px #fff, 216px 185px #fff, 1740px 1257px #fff, 1274px 1276px #fff,
+    1988px 516px #fff, 1525px 530px #fff, 18px 183px #fff, 684px 354px #fff,
+    1680px 1065px #fff, 968px 996px #fff, 475px 1362px #fff, 1999px 499px #fff,
+    781px 674px #fff, 111px 1118px #fff, 212px 1053px #fff, 801px 92px #fff,
+    380px 54px #fff, 496px 683px #fff, 645px 938px #fff, 345px 904px #fff,
+    1785px 543px #fff, 173px 479px #fff, 667px 812px #fff, 23px 964px #fff,
+    1970px 1081px #fff, 1125px 372px #fff, 236px 357px #fff, 19px 1149px #fff,
+    1377px 623px #fff, 1100px 320px #fff, 756px 704px #fff, 456px 513px #fff,
+    1368px 739px #fff, 391px 638px #fff, 953px 551px #fff, 1003px 326px #fff,
+    1800px 1234px #fff, 1733px 870px #fff, 1357px 681px #fff, 833px 1249px #fff,
+    1981px 265px #fff, 1220px 699px #fff;
+  opacity: 0.5;
+  animation: starfield-drift 180s linear infinite;
+}
+
+.hud-starfield .star-layer-med {
+  width: 3px;
+  height: 3px;
+  box-shadow: 1006px 151px #fff, 780px 993px #fff, 1674px 1175px #fff, 1387px 1222px #fff,
+    1723px 3px #fff, 1696px 1223px #fff, 994px 496px #fff, 26px 863px #fff,
+    1303px 848px #fff, 1436px 962px #fff, 95px 127px #fff, 1791px 674px #fff,
+    438px 238px #fff, 705px 105px #fff, 491px 39px #fff, 253px 1394px #fff,
+    1043px 665px #fff, 1440px 613px #fff, 606px 777px #fff, 1629px 634px #fff,
+    736px 91px #fff, 1511px 1230px #fff, 52px 1106px #fff, 653px 224px #fff,
+    209px 1077px #fff, 1648px 1151px #fff, 248px 86px #fff, 1092px 787px #fff,
+    544px 206px #fff, 957px 499px #fff;
+  opacity: 0.75;
+  animation: starfield-drift 260s linear infinite reverse;
+}
+
+@keyframes starfield-drift {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(-140px, -100px);
+  }
+}
+
+.hud-starfield .star-twinkle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 6px 1px rgba(255, 255, 255, 0.8);
+  animation: star-twinkle 5s ease-in-out infinite;
+}
+
+@keyframes star-twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* HUD backdrop: perspective grid + radar rings + scanlines, layered and
+   fixed behind all content so it reads as a cockpit display, not noise.
+   Both layers animate slowly — grid drifts like forward travel, radar
+   rings expand like an active scan — kept subtle so text stays readable. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -64px;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    /* perspective grid, vanishing toward center-top */
+    linear-gradient(rgba(90, 215, 255, 0.09) 1px, transparent 1px) 0 0 / 100% 48px,
+    linear-gradient(90deg, rgba(90, 215, 255, 0.09) 1px, transparent 1px) 0 0 / 64px 100%,
+    /* scanlines */
+    repeating-linear-gradient(
+      0deg,
+      rgba(90, 215, 255, 0.03) 0px,
+      rgba(90, 215, 255, 0.03) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(ellipse at 50% -10%, rgba(90, 215, 255, 0.1), transparent 60%),
+    var(--bg);
+  mask-image: radial-gradient(ellipse at 50% 20%, black 40%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 20%, black 40%, transparent 85%);
+  animation: grid-drift 14s linear infinite;
+}
+
+@keyframes grid-drift {
+  from {
+    background-position: 0 0, 0 0, 0 0, 0 0, 0 0;
+  }
+  to {
+    background-position: 0 48px, 64px 0, 0 0, 0 0, 0 0;
+  }
+}
+
+/* bold targeting scope: solid ring + inner ring + crosshair + angled spokes,
+   modeled on a classic sci-fi targeting-computer readout. Tucked into a
+   corner as a decorative element so it doesn't fight with page content. */
+.hud-scope {
+  position: fixed;
+  bottom: -200px;
+  right: -200px;
+  z-index: -1;
+  pointer-events: none;
+  width: 720px;
+  height: 720px;
+  opacity: 0.95;
+}
+
+.hud-scope .scope-rotator {
+  position: absolute;
+  inset: 0;
+  animation: scope-spin 140s linear infinite;
+}
+
+.hud-scope .scope-ring-outer,
+.hud-scope .scope-ring-inner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  border: 3px solid rgba(70, 170, 255, 0.85);
+  box-shadow: 0 0 22px rgba(70, 170, 255, 0.45), inset 0 0 22px rgba(70, 170, 255, 0.15);
+  transform: translate(-50%, -50%);
+  animation: scope-pulse 9s ease-in-out infinite;
+}
+
+.hud-scope .scope-ring-outer {
+  width: 640px;
+  height: 640px;
+}
+
+.hud-scope .scope-ring-inner {
+  width: 260px;
+  height: 260px;
+  animation-delay: -3s;
+}
+
+.hud-scope .scope-bezel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 700px;
+  height: 700px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(
+    rgba(70, 170, 255, 0.5) 0deg 1deg,
+    transparent 1deg 6deg
+  );
+  mask-image: radial-gradient(circle, transparent 89%, black 90%, black 94%, transparent 95%);
+  -webkit-mask-image: radial-gradient(
+    circle,
+    transparent 89%,
+    black 90%,
+    black 94%,
+    transparent 95%
+  );
+}
+
+.hud-scope .scope-crosshair {
+  position: absolute;
+  inset: -40px;
+  background:
+    linear-gradient(rgba(70, 170, 255, 0.85) 3px, transparent 3px) 0 50% / 100% 3px no-repeat,
+    linear-gradient(90deg, rgba(70, 170, 255, 0.85) 3px, transparent 3px) 50% 0 / 3px 100%
+      no-repeat;
+}
+
+.hud-scope .scope-spoke {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 300px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(70, 170, 255, 0.65), transparent);
+  transform-origin: 0 50%;
+}
+
+.hud-scope .scope-spoke.spoke-a {
+  transform: rotate(35deg);
+}
+
+.hud-scope .scope-spoke.spoke-b {
+  transform: rotate(150deg);
+}
+
+.hud-scope .scope-spoke.spoke-c {
+  transform: rotate(-70deg);
+}
+
+.hud-scope .scope-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(70, 170, 255, 0.95);
+  box-shadow: 0 0 14px rgba(70, 170, 255, 0.9);
+  transform: translate(-50%, -50%);
+}
+
+@keyframes scope-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes scope-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* amber orbital nav-plot: offset overlapping orbit rings with waypoint dots
+   and lines converging on a bright center point, modeled on a starship
+   nav-computer plotting course. Anchored opposite the blue scope. */
+.hud-nav {
+  position: fixed;
+  top: -260px;
+  left: -260px;
+  z-index: -1;
+  pointer-events: none;
+  width: 680px;
+  height: 680px;
+  opacity: 0.85;
+  animation: scope-spin 200s linear infinite reverse;
+}
+
+.hud-nav .nav-orbit {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 176, 0, 0.55);
+  box-shadow: 0 0 14px rgba(255, 176, 0, 0.25);
+}
+
+.hud-nav .orbit-a {
+  top: 50%;
+  left: 50%;
+  width: 620px;
+  height: 620px;
+  transform: translate(-50%, -50%);
+}
+
+.hud-nav .orbit-b {
+  top: 38%;
+  left: 58%;
+  width: 400px;
+  height: 400px;
+  transform: translate(-50%, -50%);
+}
+
+.hud-nav .orbit-c {
+  top: 62%;
+  left: 44%;
+  width: 230px;
+  height: 230px;
+  transform: translate(-50%, -50%);
+}
+
+/* graduated tick bezel, like the outer dial ring on the nav-computer */
+.hud-nav .nav-bezel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 680px;
+  height: 680px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(
+    rgba(255, 176, 0, 0.5) 0deg 1deg,
+    transparent 1deg 6deg
+  );
+  mask-image: radial-gradient(circle, transparent 63%, black 64%, black 68%, transparent 69%);
+  -webkit-mask-image: radial-gradient(
+    circle,
+    transparent 63%,
+    black 64%,
+    black 68%,
+    transparent 69%
+  );
+}
+
+.hud-nav .nav-line {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 176, 0, 0.7), rgba(255, 176, 0, 0));
+  transform-origin: 0 50%;
+}
+
+.hud-nav .nav-line.line-a {
+  width: 300px;
+  transform: rotate(18deg);
+}
+
+.hud-nav .nav-line.line-b {
+  width: 260px;
+  transform: rotate(96deg);
+}
+
+.hud-nav .nav-line.line-c {
+  width: 310px;
+  transform: rotate(-52deg);
+}
+
+.hud-nav .nav-line.line-d {
+  width: 200px;
+  transform: rotate(-140deg);
+}
+
+.hud-nav .nav-waypoint {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 176, 0, 0.85);
+  box-shadow: 0 0 8px rgba(255, 176, 0, 0.5);
+}
+
+.hud-nav .waypoint-a {
+  top: 22%;
+  left: 68%;
+}
+
+.hud-nav .waypoint-b {
+  top: 44%;
+  left: 82%;
+}
+
+.hud-nav .waypoint-c {
+  top: 72%;
+  left: 60%;
+}
+
+.hud-nav .waypoint-d {
+  top: 58%;
+  left: 16%;
+}
+
+.hud-nav .nav-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 176, 0, 0.9);
+  box-shadow: 0 0 16px rgba(255, 176, 0, 0.9);
+  transform: translate(-50%, -50%);
+}
+
+/* page-level scan sweep: a long diagonal beam drifting across the whole
+   viewport, like an active tactical scan — distinct speed/scale from the
+   per-panel scan-line so the two don't read as identical. */
+.hud-sweep {
+  position: fixed;
+  inset: -20% -20%;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.hud-sweep::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -20%;
+  width: 45%;
+  height: 200%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgba(90, 215, 255, 0.05) 45%,
+    rgba(90, 215, 255, 0.09) 50%,
+    rgba(90, 215, 255, 0.05) 55%,
+    transparent
+  );
+  animation: hud-sweep-move 22s linear infinite;
+}
+
+@keyframes hud-sweep-move {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(260vw);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  .hud-scope,
+  .hud-scope .scope-ring-outer,
+  .hud-scope .scope-ring-inner,
+  .hud-nav,
+  .hud-sweep::before,
+  .hud-starfield .star-layer-small,
+  .hud-starfield .star-layer-med,
+  .hud-starfield .star-twinkle,
+  .scan-sweep::before,
+  .status-dot,
+  .header-status .alert-dot {
+    animation: none;
+  }
+}
+
+/* Aurebesh side-readout: decorative glyph columns along the page edge,
+   evoking the data columns beside the targeting-computer displays. Purely
+   ornamental — real UI text lives in the toggleable components. */
+.hud-readout {
+  position: fixed;
+  top: 18%;
+  z-index: -1;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  font-family: "Aurebesh", var(--mono);
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+  color: rgba(255, 176, 0, 0.4);
+  text-shadow: 0 0 8px rgba(255, 176, 0, 0.25);
+  opacity: 0.55;
+}
+
+.hud-readout.readout-right {
+  right: 3%;
+  color: rgba(90, 215, 255, 0.45);
+  text-shadow: 0 0 8px rgba(90, 215, 255, 0.25);
+  top: 28%;
+}
+
+.hud-readout.readout-left {
+  left: 3%;
+}
+
+@media (max-width: 1100px) {
+  .hud-readout {
+    display: none;
+  }
+}
+
+.aurebesh-font {
+  font-family: "Aurebesh", var(--mono);
+  letter-spacing: 0.03em;
+}
+
+/* --- HUD panel / corner-bracket utility --- */
+.hud-panel {
+  position: relative;
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+  padding: 1rem 1.25rem;
+}
+
+.hud-panel::before,
+.hud-panel::after,
+.hud-corners > .corner-tl,
+.hud-corners > .corner-tr,
+.hud-corners > .corner-bl,
+.hud-corners > .corner-br {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: var(--cyan);
+  border-style: solid;
+  border-width: 0;
+}
+
+.hud-panel::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+
+.hud-panel::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+
+/* --- Header --- */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(90, 215, 255, 0.06), transparent);
+}
+
+.app-header h1 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.4rem;
+  color: var(--amber);
+  text-shadow: 0 0 8px rgba(255, 176, 0, 0.5);
+  letter-spacing: 0.08em;
+}
+
+.app-header h1::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--amber);
+  transform: rotate(45deg);
+  box-shadow: 0 0 8px rgba(255, 176, 0, 0.6);
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.header-status .alert-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--alert);
+  box-shadow: 0 0 8px 1px var(--alert);
+  animation: alert-blink 3.6s ease-in-out infinite;
+}
+
+@keyframes alert-blink {
+  0%,
+  85%,
+  100% {
+    opacity: 0.35;
+  }
+  90%,
+  95% {
+    opacity: 1;
+  }
+}
+
+.script-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--cyan-dim);
+  color: var(--muted);
+  padding: 0.35rem 0.7rem;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.script-toggle:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 8px rgba(90, 215, 255, 0.35);
+}
+
+.script-toggle .active {
+  color: var(--cyan);
+  text-shadow: 0 0 6px rgba(90, 215, 255, 0.6);
+}
+
+.script-toggle .divider {
+  color: var(--border);
+}
+
+.app-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.app-main h2 {
+  color: var(--cyan);
+  font-size: 0.95rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+/* --- Form --- */
+.project-form {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.75rem;
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+  padding: 0;
+  box-shadow: inset 0 0 0 1px rgba(90, 215, 255, 0.08), 0 0 24px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.project-form .console-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 1rem;
+}
+
+/* console instrument bezel: longer reticle-style corner arms */
+.project-form::before,
+.project-form::after,
+.project-item::before,
+.project-item::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-color: var(--cyan);
+  border-style: solid;
+  border-width: 0;
+  z-index: 1;
+}
+
+.project-form::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+
+.project-form::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+
+.project-form input,
+.project-form select {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+}
+
+.project-form input:focus,
+.project-form select:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 6px rgba(90, 215, 255, 0.4);
+}
+
+.project-form input[name="name"] {
+  flex: 2;
+  min-width: 160px;
+}
+
+.project-form input[name="notes"] {
+  flex: 3;
+  min-width: 160px;
+}
+
+.project-form button {
+  padding: 0.5rem 1.1rem;
+  border: 1px solid var(--amber);
+  background: transparent;
+  color: var(--amber);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-family: var(--mono);
+  cursor: pointer;
+}
+
+.project-form button:hover:not(:disabled) {
+  background: rgba(255, 176, 0, 0.1);
+  box-shadow: 0 0 10px rgba(255, 176, 0, 0.4);
+}
+
+.project-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* console instrument label strip: small system label + fake telemetry
+   readout, evoking the labeled data rows on a real cockpit instrument */
+.console-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.85rem;
+  background: rgba(90, 215, 255, 0.05);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.console-strip .console-label {
+  color: var(--cyan-dim);
+}
+
+.console-strip .console-telemetry {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* animated scan-line sweep: thin bright band drifting top-to-bottom across
+   the panel, reinforcing "active display" */
+.scan-sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.scan-sweep::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(90, 215, 255, 0.06) 45%,
+    rgba(90, 215, 255, 0.12) 50%,
+    rgba(90, 215, 255, 0.06) 55%,
+    transparent
+  );
+  animation: scan-sweep-move 7s linear infinite;
+}
+
+@keyframes scan-sweep-move {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(250%);
+  }
+}
+
+/* status dot indicator: small colored light next to a status control,
+   like a console status lamp. Color set via --status-color. */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-color, var(--muted));
+  box-shadow: 0 0 6px 1px var(--status-color, transparent);
+  animation: status-dot-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes status-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* --- Project list --- */
+.project-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.project-item {
+  position: relative;
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+  padding: 0.85rem 1.1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  box-shadow: inset 0 0 0 1px rgba(90, 215, 255, 0.06), 0 0 16px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.project-item .name {
+  font-weight: 600;
+  color: var(--amber);
+  text-shadow: 0 0 6px rgba(255, 176, 0, 0.35);
+  flex: 1 1 auto;
+  min-width: 120px;
+}
+
+.project-item .notes {
+  color: var(--muted);
+  flex-basis: 100%;
+  font-size: 0.9rem;
+}
+
+.project-item select,
+.project-item input[type="text"] {
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+}
+
+.project-item select:focus,
+.project-item input[type="text"]:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 6px rgba(90, 215, 255, 0.4);
+}
+
+.project-item button.delete {
+  border: 1px solid var(--danger);
+  background: transparent;
+  color: var(--danger);
+  padding: 0.3rem 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.project-item button.delete:hover {
+  background: rgba(255, 77, 77, 0.1);
+  box-shadow: 0 0 8px rgba(255, 77, 77, 0.4);
+}
+
+.empty-state {
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}

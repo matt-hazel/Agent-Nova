@@ -1,0 +1,18 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
+
+# Next.js
+/.next/
+/out/
+
+# Local database
+/data/
+
+# misc
+*.log
+.DS_Store
+Thumbs.db
+*.local
