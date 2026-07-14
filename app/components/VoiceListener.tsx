@@ -2,23 +2,60 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { ChatPanelHandle } from "./ChatPanel";
-import UiText from "./UiText";
+import { isSpeaking } from "../../lib/voice";
+
+export type VoiceStatus = {
+  supported: boolean;
+  listening: boolean;
+  awake: boolean;
+  micLevel: number;
+  offline: boolean;
+  fatalError: string | null;
+};
 
 export type VoiceListenerHandle = {
   stopListening: () => void;
+  enableVoice: () => void;
 };
 
-const WAKE_WORD = "hey nova";
-// How long to keep listening after the wake word before giving up if the
-// user hasn't said anything yet.
-const LISTEN_WINDOW_MS = 10000;
-// How long to wait after the last bit of speech before treating the
-// command as finished and sending it — mirrors how Alexa/Google Home wait
-// for a pause rather than requiring everything in one recognizer "final".
-const SILENCE_TIMEOUT_MS = 1500;
+export const INITIAL_VOICE_STATUS: VoiceStatus = {
+  supported: true,
+  listening: false,
+  awake: false,
+  micLevel: 0,
+  offline: false,
+  fatalError: null,
+};
 
-// TS doesn't ship types for the Web Speech API out of the box, so here's
-// just enough of the shape to make this file happy
+// the recognizer mangles "hey nova" constantly ("a nova", "hey noda", "hi
+// nova"...), so match near-misses instead of one exact phrase
+const WAKE_WORD_PATTERNS = [
+  /\bhey\s+nov[ao]\b/,
+  /\bhe['\s]?nov[ao]\b/,
+  /\bhi\s+nov[ao]\b/,
+  /\bhey\s+noda\b/,
+  // Iron Man 2 homage: "Wake up, Daddy's home"
+  /\bwake\s?up,?\s+daddy(?:'?s|\s+is)?\s+home\b/,
+];
+// pure safety net — VAD's onSpeechEnd below does the real end-of-speech
+// detection, this just stops a command window hanging forever if VAD dies
+const LISTEN_WINDOW_MS = 15000;
+// small buffer after VAD says speech ended, so the recognizer's last
+// "final" transcript has time to land before we cut things off
+const VAD_END_GRACE_MS = 1000;
+// how long to keep listening after Nova replies without needing the wake
+// word again, so follow-ups feel like a conversation and not a re-invocation
+const FOLLOWUP_WINDOW_MS = 9000;
+
+function matchWakeWord(transcript: string): { index: number; length: number } | null {
+  for (const pattern of WAKE_WORD_PATTERNS) {
+    const match = pattern.exec(transcript);
+    if (match) return { index: match.index, length: match[0].length };
+  }
+  return null;
+}
+
+// no built-in types for the Web Speech API, so here's just enough to get by
 interface SpeechRecognitionResultLike {
   isFinal: boolean;
   0: { transcript: string };
@@ -47,20 +84,32 @@ function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | undefin
   return w.SpeechRecognition ?? w.webkitSpeechRecognition;
 }
 
-const VoiceListener = forwardRef<VoiceListenerHandle, { chatRef: React.RefObject<ChatPanelHandle | null> }>(
-  function VoiceListener({ chatRef }, ref) {
+const VoiceListener = forwardRef<
+  VoiceListenerHandle,
+  { chatRef: React.RefObject<ChatPanelHandle | null>; onStatusChange?: (status: VoiceStatus) => void }
+>(function VoiceListener({ chatRef, onStatusChange }, ref) {
   const [supported, setSupported] = useState(true);
   const [listening, setListening] = useState(false);
   const [awake, setAwake] = useState(false);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
+  // 0-1 live mic level from an AnalyserNode — makes the indicator react while
+  // you're talking, before the recognizer's even transcribed anything
+  const [micLevel, setMicLevel] = useState(0);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const awakeRef = useRef(false);
-  // this just piles up everything said after the wake word, since the
-  // recognizer likes to chop it into a bunch of separate "final" results
+  // true during the post-response grace period, so the wake word isn't needed again
+  const followupRef = useRef(false);
+  // accumulates everything said after the wake word — the recognizer loves
+  // to chop one sentence into several separate "final" results
   const commandBufferRef = useRef("");
-  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listenWindowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const vadEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const followupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const vadRef = useRef<import("@ricky0123/vad-web").MicVAD | null>(null);
+  const levelRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!getSpeechRecognitionCtor()) {
@@ -68,58 +117,173 @@ const VoiceListener = forwardRef<VoiceListenerHandle, { chatRef: React.RefObject
     }
   }, []);
 
+  // pushes status up to ChatPanel, which owns the actual indicator UI
+  useEffect(() => {
+    onStatusChange?.({ supported, listening, awake, micLevel, offline, fatalError });
+  }, [supported, listening, awake, micLevel, offline, fatalError, onStatusChange]);
+
+  useEffect(() => {
+    return () => {
+      if (levelRafRef.current) cancelAnimationFrame(levelRafRef.current);
+      vadRef.current?.destroy();
+      audioContextRef.current?.close();
+      micStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
   function clearTimers() {
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (listenWindowTimerRef.current) clearTimeout(listenWindowTimerRef.current);
-    silenceTimerRef.current = null;
+    if (vadEndTimerRef.current) clearTimeout(vadEndTimerRef.current);
+    if (followupTimerRef.current) clearTimeout(followupTimerRef.current);
     listenWindowTimerRef.current = null;
+    vadEndTimerRef.current = null;
+    followupTimerRef.current = null;
   }
 
-  // just kills the recognizer, doesn't touch the chat panel itself —
-  // ChatPanel handles closing/clearing on its own and calls this through
-  // onShutdown once it hears something like "close nova" (typed or spoken)
+  // just kills the recognizer — ChatPanel handles its own closing/clearing
+  // and calls this via onShutdown when it hears "close nova" (typed or spoken)
   function stopListening() {
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
     recognition?.stop();
+    if (levelRafRef.current) cancelAnimationFrame(levelRafRef.current);
+    vadRef.current?.destroy();
+    vadRef.current = null;
+    audioContextRef.current?.close();
+    audioContextRef.current = null;
+    micStreamRef.current?.getTracks().forEach((track) => track.stop());
+    micStreamRef.current = null;
+    setMicLevel(0);
     setListening(false);
     setOffline(true);
   }
 
-  useImperativeHandle(ref, () => ({ stopListening }));
+  useImperativeHandle(ref, () => ({ stopListening, enableVoice }));
+
+  // opens the grace period after Nova replies, so the next thing you say
+  // doesn't need "Hey Nova" in front of it
+  function startFollowupWindow() {
+    clearTimers();
+    followupRef.current = true;
+    awakeRef.current = true;
+    setAwake(true);
+    followupTimerRef.current = setTimeout(() => {
+      followupRef.current = false;
+      awakeRef.current = false;
+      setAwake(false);
+    }, FOLLOWUP_WINDOW_MS);
+  }
 
   function endCommandWindow() {
     clearTimers();
     const command = commandBufferRef.current.trim();
+    followupRef.current = false;
     awakeRef.current = false;
     setAwake(false);
     commandBufferRef.current = "";
     if (!command) return;
     chatRef.current?.open();
-    chatRef.current?.sendMessage(command, { speak: true });
+    chatRef.current
+      ?.sendMessage(command, { speak: true })
+      .then(startFollowupWindow);
   }
 
   function wakeUp(initialSpeech: string) {
+    followupRef.current = false;
     awakeRef.current = true;
     setAwake(true);
     commandBufferRef.current = initialSpeech;
     clearTimers();
-    // bail out if they said the wake word and then just... nothing
+    // in case VAD never fires an end-of-speech event for whatever reason
     listenWindowTimerRef.current = setTimeout(endCommandWindow, LISTEN_WINDOW_MS);
-    if (initialSpeech) {
-      silenceTimerRef.current = setTimeout(endCommandWindow, SILENCE_TIMEOUT_MS);
-    }
   }
 
   function appendToCommand(speech: string) {
     if (!speech) return;
+    // real speech during the follow-up window turns it into a proper
+    // command window with the normal timers
+    followupRef.current = false;
     commandBufferRef.current = commandBufferRef.current
       ? `${commandBufferRef.current} ${speech}`
       : speech;
-    // more speech came in, so push the "are they done yet" timer back out
-    // again — basically copying how Alexa/Google Home wait for a pause
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    silenceTimerRef.current = setTimeout(endCommandWindow, SILENCE_TIMEOUT_MS);
+    // VAD runs on its own mic stream and can fire onSpeechEnd out of sync
+    // with the recognizer — a fresh transcript here proves the user's still
+    // talking, so cancel any pending cutoff even if VAD thought they'd stopped
+    if (vadEndTimerRef.current) {
+      clearTimeout(vadEndTimerRef.current);
+      vadEndTimerRef.current = null;
+    }
+  }
+
+  // VAD's onSpeechEnd — the real "they stopped talking" signal
+  function handleVadSpeechEnd() {
+    if (!awakeRef.current) return;
+    // this speech segment might've just been "hey nova" itself — people
+    // pause after the wake word before saying the actual command. Don't cut
+    // yet if nothing's been captured; wait for the recognizer to catch up
+    if (!commandBufferRef.current.trim()) return;
+    if (vadEndTimerRef.current) clearTimeout(vadEndTimerRef.current);
+    vadEndTimerRef.current = setTimeout(endCommandWindow, VAD_END_GRACE_MS);
+  }
+
+  // VAD's onSpeechStart — they're still talking, so cancel any pending cutoff
+  function handleVadSpeechStart() {
+    if (vadEndTimerRef.current) {
+      clearTimeout(vadEndTimerRef.current);
+      vadEndTimerRef.current = null;
+    }
+  }
+
+  async function startVadAndLevelMeter(stream: MediaStream) {
+    const AudioContextCtor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return;
+
+    const audioContext = new AudioContextCtor();
+    audioContextRef.current = audioContext;
+
+    // separate volume meter for the indicator, decoupled from VAD's own frame cadence
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.6;
+    source.connect(analyser);
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    function tick() {
+      analyser.getByteTimeDomainData(dataArray);
+      let sumSquares = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        const normalized = (dataArray[i] - 128) / 128;
+        sumSquares += normalized * normalized;
+      }
+      const rms = Math.sqrt(sumSquares / dataArray.length);
+      // speech rms rarely gets close to 1, so scale it up to actually use the indicator's range
+      setMicLevel(Math.min(1, rms * 4));
+      levelRafRef.current = requestAnimationFrame(tick);
+    }
+    tick();
+
+    try {
+      const { MicVAD } = await import("@ricky0123/vad-web");
+      const vad = await MicVAD.new({
+        audioContext,
+        getStream: async () => stream,
+        pauseStream: async () => {},
+        resumeStream: async () => stream,
+        baseAssetPath: "/vad/",
+        onnxWASMBasePath: "/vad/",
+        onSpeechStart: handleVadSpeechStart,
+        onSpeechEnd: handleVadSpeechEnd,
+      });
+      vadRef.current = vad;
+      vad.start();
+    } catch (err) {
+      // VAD's a nice-to-have — if the model/worklet fails to load, just
+      // fall back to the LISTEN_WINDOW_MS timer
+      console.warn("VAD unavailable, falling back to timer-based listening:", err);
+    }
   }
 
   function enableVoice() {
@@ -140,13 +304,16 @@ const VoiceListener = forwardRef<VoiceListenerHandle, { chatRef: React.RefObject
         const transcript = result[0].transcript.trim().toLowerCase();
 
         if (!awakeRef.current) {
-          const wakeIndex = transcript.indexOf(WAKE_WORD);
-          if (wakeIndex === -1) continue;
-          const rest = transcript.slice(wakeIndex + WAKE_WORD.length).trim();
-          // only open the listening window once this bit is final —
-          // interim results are too flaky to trust, and if we set awakeRef
-          // early and it never resolves (recognizer restarts mid-phrase,
-          // whatever) we'd get stuck "awake" forever
+          // ignore Nova's own voice bleeding back through the mic — she
+          // still gets interrupted fine once she's done, since sendMessage
+          // now waits for real playback to finish before reopening listening
+          if (isSpeaking()) continue;
+          const wakeMatch = matchWakeWord(transcript);
+          if (!wakeMatch) continue;
+          const rest = transcript.slice(wakeMatch.index + wakeMatch.length).trim();
+          // wait for isFinal — interim results are too flaky to trust, and
+          // waking up early on one that never resolves would leave us
+          // stuck "awake" forever
           if (result.isFinal) {
             wakeUp(rest);
           }
@@ -158,9 +325,8 @@ const VoiceListener = forwardRef<VoiceListenerHandle, { chatRef: React.RefObject
 
     recognition.onerror = (event) => {
       const error = (event as unknown as { error?: string }).error;
-      // "no-speech" and "aborted" happen all the time and fix themselves
-      // once onend restarts things. permission/device errors are dead
-      // ends though — no point silently retrying forever
+      // "no-speech" / "aborted" happen constantly and fix themselves once
+      // onend restarts things — but permission/device errors are dead ends
       if (error === "not-allowed" || error === "service-not-allowed") {
         setFatalError("Microphone access was denied or revoked.");
         setListening(false);
@@ -173,16 +339,15 @@ const VoiceListener = forwardRef<VoiceListenerHandle, { chatRef: React.RefObject
     };
 
     recognition.onend = () => {
-      // browser stops "continuous" recognition on its own sometimes
-      // (silence timeout, whatever), so just start it back up. awake
-      // state and the buffered command live outside this object so an
-      // in-progress command survives the restart just fine. skip the
-      // restart if we hit a fatal error above (ref got cleared)
+      // the browser stops "continuous" recognition on its own sometimes —
+      // just restart it. awake state and the command buffer live outside
+      // this object, so an in-progress command survives fine. Skip the
+      // restart if a fatal error already cleared the ref above.
       if (recognitionRef.current !== recognition) return;
       try {
         recognition.start();
       } catch {
-        // probably already running, whatever
+        // probably already running
       }
     };
 
@@ -191,40 +356,23 @@ const VoiceListener = forwardRef<VoiceListenerHandle, { chatRef: React.RefObject
     setFatalError(null);
     setOffline(false);
     setListening(true);
+
+    // grab the mic for VAD + the level meter. SpeechRecognition manages its
+    // own mic access with no way to share it, so this is a second
+    // getUserMedia call — browsers dedupe it and won't prompt twice
+    navigator.mediaDevices
+      ?.getUserMedia({ audio: true })
+      .then((stream) => {
+        micStreamRef.current = stream;
+        startVadAndLevelMeter(stream);
+      })
+      .catch((err) => {
+        console.warn("Mic level meter / VAD unavailable:", err);
+      });
   }
 
-  if (!supported) {
-    return (
-      <div className="voice-status voice-unsupported">
-        <UiText>Voice not supported in this browser</UiText>
-      </div>
-    );
-  }
-
-  return (
-    <div className="voice-status">
-      {listening ? (
-        <span
-          className={`status-dot voice-indicator ${awake ? "voice-awake" : ""}`}
-          style={{ "--status-color": awake ? "#ffb000" : "#5ad7ff" } as React.CSSProperties}
-          title="Listening for &quot;Hey Nova&quot;"
-        />
-      ) : (
-        <button
-          type="button"
-          className={`voice-enable ${offline ? "voice-offline" : ""}`}
-          onClick={enableVoice}
-          title={fatalError ?? undefined}
-        >
-          <UiText>
-            {fatalError ? "Retry Voice" : offline ? "Nova Offline — Restart" : "Enable Voice"}
-          </UiText>
-        </button>
-      )}
-      {fatalError && <span className="voice-error">{fatalError}</span>}
-    </div>
-  );
-  }
-);
+  // no UI here — ChatPanel renders the indicator from the status above
+  return null;
+});
 
 export default VoiceListener;

@@ -5,6 +5,7 @@ import {
   listProjects,
   updateProject,
 } from "./projects";
+import { memoryTools } from "./memory-tools";
 
 export const listProjectsTool = betaTool({
   name: "list_projects",
@@ -100,4 +101,5 @@ export const chatTools = [
   createProjectTool,
   updateProjectTool,
   deleteProjectTool,
+  ...memoryTools,
 ];

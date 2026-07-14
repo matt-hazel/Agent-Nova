@@ -1157,6 +1157,15 @@ body::before {
   animation: alert-blink 1s ease-in-out infinite;
 }
 
+/* mic is actually picking up sound right now — let the live scale/glow
+   (set inline from the level meter) read clearly instead of fighting the
+   ambient idle pulse */
+.voice-indicator.voice-hearing {
+  animation: none;
+  opacity: 1;
+  transition: transform 0.05s ease-out, box-shadow 0.05s ease-out;
+}
+
 .voice-unsupported {
   font-size: 0.65rem;
   letter-spacing: 0.06em;

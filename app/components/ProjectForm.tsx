@@ -41,44 +41,31 @@ export default function ProjectForm({
 
   return (
     <form className="project-form" onSubmit={handleSubmit}>
-      <div className="scan-sweep" />
-      <div className="console-strip">
-        <span className="console-label">
-          <UiText>Task Registry // Input</UiText>
-        </span>
-        <span className="console-telemetry">NV-01A</span>
-      </div>
-      <div className="console-fields">
-        <input
-          name="name"
-          placeholder="Project name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <span
-          className="status-dot"
-          style={{ "--status-color": STATUS_COLOR[status] } as React.CSSProperties}
-        />
-        <select
-          name="status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="active">active</option>
-          <option value="paused">paused</option>
-          <option value="done">done</option>
-        </select>
-        <input
-          name="notes"
-          placeholder="Notes (optional)"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-        />
-        <button type="submit" disabled={submitting}>
-          <UiText>Add</UiText>
-        </button>
-      </div>
+      <input
+        name="name"
+        placeholder="Project name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        required
+      />
+      <select
+        name="status"
+        value={status}
+        onChange={(e) => setStatus(e.target.value)}
+      >
+        <option value="active">active</option>
+        <option value="paused">paused</option>
+        <option value="done">done</option>
+      </select>
+      <input
+        name="notes"
+        placeholder="Notes (optional)"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+      />
+      <button type="submit" disabled={submitting}>
+        <UiText>Add</UiText>
+      </button>
     </form>
   );
 }
