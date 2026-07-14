@@ -57,6 +57,42 @@ Aurebesh font:
   Font License.txt there — free for personal/non-commercial use). Wired
   up via @font-face in app/globals.css (regular/bold/italic/bold-italic).
 
+--- Agent Comlink: chat panel + voice ---
+
+What this is:
+  A side chat panel ("Comlink" button in the header) for talking to a
+  planning agent about your projects, plus wake-word voice input ("Hey
+  Nova, ..."). This is a separate agent from Claude Code — Nova's own
+  backend (app/api/chat/route.ts) calls the Anthropic API directly using
+  the official @anthropic-ai/sdk. The agent can read and modify your
+  projects (list/add/update/delete) via the same lib/projects.ts functions
+  the UI and CLI use, so anything it does shows up immediately on the
+  dashboard.
+
+Setup required:
+  Get an API key at console.anthropic.com -> API Keys, then add it to
+  .env:
+    ANTHROPIC_API_KEY=sk-ant-...
+  Without a key, the chat panel shows a clear inline error instead of
+  failing silently — the rest of the dashboard works fine without one.
+
+Voice (wake-word, no push-to-talk button):
+  Click "Enable Voice" once per session to grant microphone access (this
+  one click is unavoidable — browsers require a user gesture before
+  granting mic access, so it can't be fully button-free). After that, Nova
+  listens continuously and only acts after hearing "Hey Nova" followed by
+  your request — nothing is sent anywhere until the wake word is heard.
+  Replies to voice messages are read aloud via the browser's built-in
+  text-to-speech. Voice requires a browser with Web Speech API support
+  (Chrome, Edge, Safari — not Firefox as of this writing); on unsupported
+  browsers you'll see a small "Voice not supported" note instead of a
+  broken button, and the rest of the dashboard is unaffected.
+
+Model: claude-opus-4-8, via the SDK's tool runner (client.beta.messages.
+toolRunner) with adaptive thinking. Chat history is kept in memory in the
+browser tab only (not persisted to the database) — refreshing the page
+starts a new conversation.
+
 Planned next (not yet built):
   - Task-level tracking under each project
   - Research feed / agent output log

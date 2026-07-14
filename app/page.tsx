@@ -25,8 +25,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    const source = new EventSource("/api/projects/stream");
+    source.onmessage = (event) => {
+      setProjects(JSON.parse(event.data));
+      setLoading(false);
+    };
+    return () => source.close();
+  }, []);
 
   return (
     <section>

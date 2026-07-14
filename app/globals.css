@@ -950,3 +950,233 @@ body::before {
   color: var(--muted);
   letter-spacing: 0.05em;
 }
+
+/* --- Agent Comlink: chat toggle, side panel, voice status --- */
+.chat-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--amber-dim);
+  color: var(--amber);
+  padding: 0.35rem 0.7rem;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.chat-toggle:hover {
+  border-color: var(--amber);
+  box-shadow: 0 0 8px rgba(255, 176, 0, 0.35);
+}
+
+.chat-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  width: min(360px, 92vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg);
+  border-left: 1px solid var(--border);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 176, 0, 0.08);
+}
+
+.chat-panel .console-strip {
+  background: rgba(255, 176, 0, 0.05);
+}
+
+.chat-strip-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.chat-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-close:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.chat-clear {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  height: 20px;
+  padding: 0 0.4rem;
+  line-height: 1;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--mono);
+  cursor: pointer;
+}
+
+.chat-clear:hover:not(:disabled) {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.chat-clear:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.chat-bubble {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  max-width: 92%;
+}
+
+.chat-bubble-user {
+  align-self: flex-end;
+  border-color: var(--cyan-dim);
+  color: var(--fg);
+}
+
+.chat-bubble-assistant {
+  align-self: flex-start;
+  border-color: var(--amber-dim);
+  color: var(--fg);
+  text-shadow: 0 0 4px rgba(255, 176, 0, 0.15);
+}
+
+.chat-pending {
+  opacity: 0.6;
+}
+
+.chat-error {
+  color: var(--danger);
+  font-size: 0.8rem;
+  padding: 0 0.25rem;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.chat-input-row input {
+  flex: 1;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+}
+
+.chat-input-row input:focus {
+  outline: none;
+  border-color: var(--amber);
+  box-shadow: 0 0 6px rgba(255, 176, 0, 0.4);
+}
+
+.chat-input-row button {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--amber);
+  background: transparent;
+  color: var(--amber);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.chat-input-row button:hover:not(:disabled) {
+  background: rgba(255, 176, 0, 0.1);
+}
+
+.chat-input-row button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.voice-status {
+  display: flex;
+  align-items: center;
+}
+
+.voice-enable {
+  background: var(--panel-bg);
+  border: 1px solid var(--cyan-dim);
+  color: var(--muted);
+  padding: 0.35rem 0.6rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.voice-offline {
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
+}
+
+.voice-enable:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.voice-indicator {
+  animation: status-dot-pulse 2.4s ease-in-out infinite;
+}
+
+.voice-indicator.voice-awake {
+  animation: alert-blink 1s ease-in-out infinite;
+}
+
+/* mic is actually picking up sound right now — let the live scale/glow
+   (set inline from the level meter) read clearly instead of fighting the
+   ambient idle pulse */
+.voice-indicator.voice-hearing {
+  animation: none;
+  opacity: 1;
+  transition: transform 0.05s ease-out, box-shadow 0.05s ease-out;
+}
+
+.voice-unsupported {
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.voice-error {
+  margin-left: 0.5rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  color: var(--danger);
+  max-width: 180px;
+}

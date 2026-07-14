@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AurebeshProvider } from "./aurebesh-context";
 import AurebeshToggle from "./components/AurebeshToggle";
+import AgentComlink from "./components/AgentComlink";
 import UiText from "./components/UiText";
 import { toAurebesh } from "../lib/aurebesh";
 
@@ -85,6 +86,7 @@ export default function RootLayout({
                 <span className="alert-dot" />
                 <UiText>Systems Nominal</UiText>
               </span>
+              <AgentComlink />
               <AurebeshToggle />
             </div>
           </header>
