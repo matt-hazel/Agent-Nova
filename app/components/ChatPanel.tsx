@@ -109,6 +109,16 @@ function isShutdownCommand(text: string): boolean {
   return SHUTDOWN_PATTERN.test(text.trim());
 }
 
+// the emergency stop — "stop", "abort", "kill it", etc. Handled client-side,
+// same as clear/shutdown, so it fires instantly instead of waiting on a
+// model round-trip.
+const STOP_PATTERN =
+  /^(?:please\s+)?(?:stop|abort|kill it|stop everything|cancel everything)\.?$/i;
+
+function isStopCommand(text: string): boolean {
+  return STOP_PATTERN.test(text.trim());
+}
+
 // sits in the chat header strip so it's visible whenever you're actually
 // looking at the chat, not buried in the app header
 function VoiceIndicator({
@@ -185,6 +195,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
   // "Clear" below only wipes the visible messages, never this
   const conversationIdRef = useRef<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     primeDroidVoice();
@@ -221,6 +232,16 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
     [onShutdown]
   );
 
+  // the emergency stop — aborts whatever chat turn is in flight and tells
+  // the server to interrupt every active dispatch, regardless of which
+  // conversation started them
+  const stopEverything = useCallback(() => {
+    abortControllerRef.current?.abort();
+    fetch("/api/kill-switch", { method: "POST" }).catch(() => {
+      // best-effort — if this fails the user can retry the stop
+    });
+  }, []);
+
   const sendMessage = useCallback(
     async (text: string, opts?: { speak?: boolean }) => {
       if (!text.trim() || sending) return;
@@ -232,6 +253,10 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
         shutDown(opts);
         return;
       }
+      if (isStopCommand(text)) {
+        stopEverything();
+        return;
+      }
       setError(null);
       const nextMessages: ChatMessage[] = [
         ...messagesRef.current,
@@ -239,6 +264,8 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
       ];
       setMessages(nextMessages);
       setSending(true);
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
@@ -247,6 +274,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
             messages: nextMessages,
             conversationId: conversationIdRef.current,
           }),
+          signal: controller.signal,
         });
         if (!res.ok || !res.body) {
           const data = await res.json().catch(() => null);
@@ -277,11 +305,19 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
         setSending(false);
         await speechQueue?.finish();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Chat request failed");
+        if (err instanceof Error && err.name === "AbortError") {
+          setError(null);
+        } else {
+          setError(err instanceof Error ? err.message : "Chat request failed");
+        }
         setSending(false);
+      } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
       }
     },
-    [sending, clearChat, shutDown]
+    [sending, clearChat, shutDown, stopEverything]
   );
 
   useImperativeHandle(ref, () => ({
@@ -371,9 +407,15 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
                 placeholder="Message"
                 disabled={sending}
               />
-              <button type="submit" disabled={sending || !input.trim()}>
-                <UiText>Send</UiText>
-              </button>
+              {sending ? (
+                <button type="button" className="chat-stop" onClick={stopEverything}>
+                  <UiText>Stop</UiText>
+                </button>
+              ) : (
+                <button type="submit" disabled={!input.trim()}>
+                  <UiText>Send</UiText>
+                </button>
+              )}
             </form>
           </aside>
       )}

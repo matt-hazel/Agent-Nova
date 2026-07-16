@@ -9,9 +9,9 @@ Directions to follow below:
 What this is:
 A local Next.js + TypeScript dashboard backed by a local SQLite database
 (via Prisma). v1 has one working feature: a project tracker (add/edit
-status & notes/delete). Automation is intended to come from Claude Code
-sessions (agents) reading and writing this data over time, not from a
-separate agent runtime baked into the app.
+status & notes/delete). Beyond that, Nova's chat (see "Agent Comlink"
+below) can now dispatch real coding/automation work to Anthropic's
+Managed Agents platform — see "Agent Dispatch" below.
 
 Setup (first time / after pulling changes):
   npm install
@@ -89,12 +89,94 @@ Voice (wake-word, no push-to-talk button):
   broken button, and the rest of the dashboard is unaffected.
 
 Model: claude-opus-4-8, via the SDK's tool runner (client.beta.messages.
-toolRunner) with adaptive thinking. Chat history is kept in memory in the
-browser tab only (not persisted to the database) — refreshing the page
-starts a new conversation.
+toolRunner) with adaptive thinking. Chat history is persisted to the
+database (one continuous conversation per browser, tracked via a
+localStorage id) so it's searchable later — "Clear" in the UI only
+resets what's visible, it doesn't delete history.
+
+--- Agent Dispatch: multi-agent coding via Managed Agents ---
+
+What this is:
+  Nova's chat can dispatch real coding/automation work — not just talk
+  about it — to Anthropic's Managed Agents platform. Ask Nova to build
+  something and it kicks off a coordinator agent with a coding sub-agent
+  that actually writes code, runs bash, and sets up environments, then
+  reports back (a "Dispatches" panel on the dashboard shows live status
+  too). This runs in the background — a dispatch can take several
+  minutes, and Nova won't block waiting on it.
+
+Self-improvement:
+  Projects about Nova itself (this app) can be flagged as such — Nova
+  recognizes this from conversation and tags the project automatically.
+  Dispatching coding work against a self-flagged project targets Nova's
+  own real GitHub repo (github.com/matt-hazel/Agent-Nova) instead of a
+  scratch environment, so Nova can genuinely extend its own source over
+  time.
+
+Other repos:
+  Any project can be linked to a GitHub repo by setting its repo_url
+  (Nova does this automatically when you mention a repo in conversation,
+  e.g. "this project is about the Foo repo"). Dispatching coding work
+  against a project with a repo_url clones/pushes to that repo, same as
+  self-improvement dispatches do for Nova's own repo. A project with no
+  repo_url and isSelf: false dispatches into an empty scratch
+  environment with nothing to push to — if you expect a dispatch to
+  push somewhere and it doesn't seem to have, check whether the project
+  actually has a repo_url set.
+
+Safety (read this before dispatching against a real repo):
+  The coding sub-agent is instructed to always work on a new branch and
+  never push to main/master — but this is a prompt instruction, not a
+  hard platform-enforced restriction. Review what it did before merging
+  anything. The sub-agent is also instructed never to modify Nova's own
+  kill-switch code (see below) — same caveat, it's a prompt instruction.
+
+Kill switch:
+  Two stop controls exist. (1) A global emergency stop: click "Stop"
+  in the chat panel while Nova is replying (or say/type "stop" /
+  "abort" / "kill it"), which both cancels the in-progress chat reply
+  and interrupts every currently-running dispatch, regardless of which
+  conversation started them. (2) Per-dispatch stop: a "Stop" button on
+  each running row in the Dispatches panel, or telling Nova to "stop
+  the [name] dispatch" — either interrupts just that one dispatch via
+  a real user.interrupt event sent to Anthropic's Sessions API
+  (platform-enforced, not something the sub-agent's own code can
+  intercept or ignore). If the app itself were ever unhealthy or
+  unresponsive, the actual backstop is revoking credentials at the
+  source — the GITHUB_TOKEN (GitHub -> Settings -> fine-grained
+  tokens) or ANTHROPIC_API_KEY (Anthropic Console) — both work
+  independent of whether Nova's own server process is running.
+
+One-time setup:
+  1. Run: npm run setup:agents
+     This provisions a coordinator agent, a coding sub-agent, and a
+     scratch environment on Anthropic's Managed Agents platform, and
+     prints the resulting IDs.
+  2. Add the printed IDs to .env:
+       MANAGED_AGENTS_COORDINATOR_AGENT_ID=...
+       MANAGED_AGENTS_ENVIRONMENT_ID=...
+  3. If you want dispatch to work against any real repo (Nova's own or
+     others), create a fine-grained GitHub PAT at github.com/settings/
+     personal-access-tokens, and add it to .env:
+       GITHUB_TOKEN=github_pat_...
+     One token covers every repo you dispatch against — under
+     "Repository access", pick "Only select repositories" and add each
+     repo you want Nova to be able to work on (Agent-Nova plus any
+     others), rather than "All repositories". Under "Repository
+     permissions", set "Contents" to "Read and write" — nothing broader,
+     no admin. Add more repos to the token's scope (or issue a new one)
+     any time you link a new project to a repo.
+  Without step 3, dispatch still works for scratch/new-project work with
+  no repo attached — only repo-linked dispatches (self or otherwise)
+  need the token.
 
 Planned next (not yet built):
   - Task-level tracking under each project
   - Research feed / agent output log
   - Scheduled automations
   - Gmail / Calendar / Drive integration surfaced on the dashboard
+  - Hard per-action approval gating (not just a prompt instruction) for
+    self-repo dispatch actions, and landing changes as a reviewable PR
+    instead of a pushed branch. (The kill switch above already stops a
+    dispatch outright, platform-enforced — this would add a tighter,
+    step-by-step confirm/deny gate on top of that, not replace it.)

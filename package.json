@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "projects": "tsx scripts/projects-cli.ts"
+    "projects": "tsx scripts/projects-cli.ts",
+    "setup:agents": "tsx scripts/setup-managed-agents.ts"
   },
   "keywords": [],
   "author": "",

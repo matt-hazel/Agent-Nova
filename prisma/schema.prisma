@@ -17,6 +17,8 @@ model Project {
   name      String
   status    String   @default("active")
   notes     String?
+  isSelf    Boolean  @default(false)
+  repoUrl   String?  // GitHub repo this project's dispatches should target, if any
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -49,4 +51,34 @@ model Message {
 
   @@index([conversationId])
   @@index([createdAt])
+}
+
+model Dispatch {
+  id                     String          @id @default(cuid())
+  conversationId         String?
+  projectId              String?
+  title                  String
+  status                 String          @default("queued") // "queued" | "running" | "idle" | "needs_input" | "completed" | "failed"
+  managedAgentsSessionId String?
+  repoUrl                String?         // GitHub repo this dispatch attached, if any
+  errorMessage           String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  events                 DispatchEvent[]
+
+  @@index([conversationId])
+  @@index([status])
+}
+
+model DispatchEvent {
+  id            String   @id @default(cuid())
+  dispatchId    String
+  dispatch      Dispatch @relation(fields: [dispatchId], references: [id])
+  remoteEventId String   @unique // the event's own id from Anthropic, for dedup
+  type          String   // raw event.type, e.g. "agent.tool_use" | "agent.tool_result" | "agent.message"
+  processedAt   DateTime // from the event's own processed_at
+  payload       String   // full raw event JSON, verbatim
+  createdAt     DateTime @default(now())
+
+  @@index([dispatchId, processedAt])
 }

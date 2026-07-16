@@ -946,6 +946,128 @@ body::before {
   box-shadow: 0 0 8px rgba(255, 77, 77, 0.4);
 }
 
+.dispatch-self-badge {
+  color: var(--cyan-dim);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dispatch-status-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+.dispatch-item {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.dispatch-expand-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  flex: 1 1 auto;
+  display: flex;
+}
+
+.dispatch-expand-toggle .name {
+  cursor: pointer;
+}
+
+.dispatch-transcript-wrap {
+  flex-basis: 100%;
+  margin-top: 0.6rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+}
+
+.dispatch-transcript-empty {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.dispatch-transcript {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.dispatch-event {
+  display: flex;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+  font-family: var(--mono);
+  line-height: 1.4;
+}
+
+.dispatch-event-time {
+  color: var(--muted);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.dispatch-event-body {
+  color: var(--fg);
+  word-break: break-word;
+}
+
+.dispatch-event-tool-use .dispatch-event-body {
+  color: var(--cyan);
+}
+
+.dispatch-event-tool-result .dispatch-event-body {
+  color: var(--muted);
+}
+
+.dispatch-event-error .dispatch-event-body {
+  color: var(--danger);
+}
+
+.dispatch-event-message .dispatch-event-body {
+  color: var(--amber);
+}
+
+.dispatch-event-thinking .dispatch-event-body {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.dispatch-event-status .dispatch-event-body {
+  color: var(--cyan-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.72rem;
+}
+
+.dispatch-stop-button {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  height: 20px;
+  padding: 0 0.4rem;
+  line-height: 1;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--mono);
+  cursor: pointer;
+}
+
+.dispatch-stop-button:hover {
+  background: rgba(255, 77, 77, 0.1);
+  box-shadow: 0 0 8px rgba(255, 77, 77, 0.4);
+}
+
 .empty-state {
   color: var(--muted);
   letter-spacing: 0.05em;
@@ -1120,6 +1242,15 @@ body::before {
 .chat-input-row button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.chat-input-row button.chat-stop {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.chat-input-row button.chat-stop:hover {
+  background: rgba(255, 77, 77, 0.1);
 }
 
 .voice-status {

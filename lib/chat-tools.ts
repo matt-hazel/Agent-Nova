@@ -6,6 +6,7 @@ import {
   updateProject,
 } from "./projects";
 import { memoryTools } from "./memory-tools";
+import { dispatchTools } from "./dispatch-tools";
 
 export const listProjectsTool = betaTool({
   name: "list_projects",
@@ -34,16 +35,34 @@ export const createProjectTool = betaTool({
         description: "Project status, defaults to active",
       },
       notes: { type: "string", description: "Optional notes about the project" },
+      is_self: {
+        type: "boolean",
+        description:
+          "Set to true if this project is about Nova itself — the personal dashboard app you're part of, whose source lives at github.com/matt-hazel/Agent-Nova. Set this automatically when you recognize the project is self-referential; don't ask the user to confirm.",
+      },
+      repo_url: {
+        type: "string",
+        description:
+          "GitHub repo URL this project is about, if any (e.g. https://github.com/owner/repo.git). Set this when the user mentions a repo the project relates to, so dispatch_coding_task can clone/push to it. Not needed for is_self projects, which already target Nova's own repo automatically.",
+      },
     },
     required: ["name"],
   },
   run: async (input) => {
-    const { name, status, notes } = input as {
+    const { name, status, notes, is_self, repo_url } = input as {
       name: string;
       status?: string;
       notes?: string;
+      is_self?: boolean;
+      repo_url?: string;
     };
-    const project = await createProject({ name, status, notes });
+    const project = await createProject({
+      name,
+      status,
+      notes,
+      isSelf: is_self,
+      repoUrl: repo_url,
+    });
     return JSON.stringify(project);
   },
 });
@@ -63,17 +82,34 @@ export const updateProjectTool = betaTool({
         description: "New project status",
       },
       notes: { type: "string", description: "New notes" },
+      is_self: {
+        type: "boolean",
+        description:
+          "Set to true if this project is about Nova itself. See create_project's is_self for details.",
+      },
+      repo_url: {
+        type: "string",
+        description: "GitHub repo URL this project is about, if any. See create_project's repo_url for details.",
+      },
     },
     required: ["id"],
   },
   run: async (input) => {
-    const { id, name, status, notes } = input as {
+    const { id, name, status, notes, is_self, repo_url } = input as {
       id: string;
       name?: string;
       status?: string;
       notes?: string;
+      is_self?: boolean;
+      repo_url?: string;
     };
-    const project = await updateProject(id, { name, status, notes });
+    const project = await updateProject(id, {
+      name,
+      status,
+      notes,
+      isSelf: is_self,
+      repoUrl: repo_url,
+    });
     return JSON.stringify(project);
   },
 });
@@ -102,4 +138,5 @@ export const chatTools = [
   updateProjectTool,
   deleteProjectTool,
   ...memoryTools,
+  ...dispatchTools,
 ];
